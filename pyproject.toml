@@ -30,7 +30,6 @@ dependencies = [
     "httpx[socks]<0.28,>=0.24.1",
     "toml>=0.10.2",
     "rich>=13.7.0",
-    "click>=8.1.7",
     "InquirerPy",
 ]
 
@@ -39,4 +38,4 @@ dependencies = [
 "Bug Tracker" = "https://github.com/leen2233/hey-py/issues"
 
 [project.scripts]
-hey = "hey.__main__:cli"
+hey = "hey.__main__:main"

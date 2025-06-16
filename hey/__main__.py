@@ -1,10 +1,10 @@
 """Main entry point for the hey CLI."""
+import argparse
 import os
 import sys
 import time
 from pathlib import Path
 
-import click
 import httpx
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -13,31 +13,33 @@ from . import api
 from .config import Config, load_config
 
 
-@click.command(context_settings={"ignore_unknown_options": True})
-@click.option('--agree-tos', is_flag=True, help='Agree to the DuckDuckGo TOS')
-@click.option('--quiet', '-q', is_flag=True, help='Do not show progress meter')
-@click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
-@click.option('--prompt', '-p', help='Set a system prompt for all responses')
-@click.option('--save-prompt', is_flag=True, help='Save the provided prompt to config')
-@click.option('--proxy', help='HTTP/HTTPS proxy URL (e.g., http://proxy:8080)')
-@click.option('--socks-proxy', help='SOCKS proxy URL (e.g., socks5://proxy:1080)')
-@click.argument('args', nargs=-1)
-def cli(args: tuple[str, ...], agree_tos: bool, quiet: bool, verbose: bool,
-        prompt: str | None, save_prompt: bool, proxy: str | None, socks_proxy: str | None) -> None:
-    """Hey - DuckDuckGo Chat CLI.
+def main():
+    parser = argparse.ArgumentParser(
+        description="Hey - DuckDuckGo Chat CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+    hey "What is Python?"
+    hey how are you
+    hey --prompt "You are a Python expert" "How do I use decorators?"
+    hey -v "Tell me about asyncio"
+    hey --proxy http://proxy:8080 "What's my IP?"
+    hey --socks-proxy socks5://proxy:1080 "What's my IP?"
 
-    Examples:
-        hey "What is Python?"
-        hey how are you
-        hey --prompt "You are a Python expert" "How do I use decorators?"
-        hey -v "Tell me about asyncio"
-        hey --proxy http://proxy:8080 "What's my IP?"
-        hey --socks-proxy socks5://proxy:1080 "What's my IP?"
+    # Configure settings
+    hey config
+""")
+    parser.add_argument('--agree-tos', action='store_true', help='agree to the DuckDuckGo TOS')
+    parser.add_argument('--quiet', '-q', action='store_true', help='do not show progress meter')
+    parser.add_argument('--verbose', '-v', action='store_true', help='enable verbose logging')
+    parser.add_argument('--prompt', '-p', help='set a system prompt for all responses')
+    parser.add_argument('--save-prompt', action='store_true', help='save the provided prompt to config')
+    parser.add_argument('--proxy', metavar='URL', help='HTTP/HTTPS proxy URL (e.g., http://proxy:8080)')
+    parser.add_argument('--socks-proxy', metavar='URL', help='SOCKS proxy URL (e.g., socks5://proxy:1080)')
+    parser.add_argument('args', nargs='*', help='chat query or "config" command')
+    args = parser.parse_args()
 
-        # Configure settings
-        hey config
-    """
-    if len(args) == 1 and args[0] == "config":
+    if len(args.args) == 1 and args.args[0] == "config":
         from .cli import run_config
         run_config()
         return
@@ -46,37 +48,37 @@ def cli(args: tuple[str, ...], agree_tos: bool, quiet: bool, verbose: bool,
     if not config:
         config = Config()
 
-    if agree_tos:
+    if args.agree_tos:
         if not config.tos:
             print("\033[32mTOS accepted\033[0m")
         config.tos = True
         config.save()
 
-    if prompt:
-        config.prompt = prompt
-        if save_prompt:
+    if args.prompt:
+        config.prompt = args.prompt
+        if args.save_prompt:
             config.save()
             print(f"\033[32mSaved system prompt to config\033[0m")
 
-    if proxy:
-        if not config.validate_proxy_url(proxy):
-            print(f"\033[31mInvalid HTTP proxy URL format: {proxy}\033[0m", file=sys.stderr)
+    if args.proxy:
+        if not config.validate_proxy_url(args.proxy):
+            print(f"\033[31mInvalid HTTP proxy URL format: {args.proxy}\033[0m", file=sys.stderr)
             sys.exit(1)
-        config.proxy = proxy
-        if save_prompt:
+        config.proxy = args.proxy
+        if args.save_prompt:
             config.save()
             print(f"\033[32mSaved proxy settings to config\033[0m")
 
-    if socks_proxy:
-        if not config.validate_proxy_url(socks_proxy, allow_socks=True):
-            print(f"\033[31mInvalid SOCKS proxy URL format: {socks_proxy}\033[0m", file=sys.stderr)
+    if args.socks_proxy:
+        if not config.validate_proxy_url(args.socks_proxy, allow_socks=True):
+            print(f"\033[31mInvalid SOCKS proxy URL format: {args.socks_proxy}\033[0m", file=sys.stderr)
             sys.exit(1)
-        config.socks_proxy = socks_proxy
-        if save_prompt:
+        config.socks_proxy = args.socks_proxy
+        if args.save_prompt:
             config.save()
             print(f"\033[32mSaved proxy settings to config\033[0m")
 
-    config.verbose = verbose
+    config.verbose = args.verbose
 
     if not config.tos:
         print("\033[31mYou must agree to DuckDuckGo's Terms of Service to use this tool.\033[0m", file=sys.stderr)
@@ -90,7 +92,7 @@ def cli(args: tuple[str, ...], agree_tos: bool, quiet: bool, verbose: bool,
         print("This program must be run in a terminal", file=sys.stderr)
         sys.exit(1)
 
-    query_str = ' '.join(args)
+    query_str = ' '.join(args.args)
     if not query_str:
         print("Please provide a query", file=sys.stderr)
         sys.exit(1)
@@ -111,7 +113,7 @@ def cli(args: tuple[str, ...], agree_tos: bool, quiet: bool, verbose: bool,
             TextColumn("[bold blue]Initializing...[/]"),
             transient=True,  # Remove progress bar when done
             console=Console(stderr=True),  # Show on stderr to not interfere with response
-            disable=quiet,
+            disable=args.quiet,
         ) as progress:
             task = progress.add_task("", total=None)  # Indeterminate progress
 
@@ -129,4 +131,4 @@ def cli(args: tuple[str, ...], agree_tos: bool, quiet: bool, verbose: bool,
 
 
 if __name__ == '__main__':
-    cli()
+    main()

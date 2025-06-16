@@ -9,7 +9,6 @@ setup(
         "httpx[socks]>=0.24.1",
         "toml>=0.10.2",
         "rich>=13.7.0",
-        "click>=8.1.7",
         "InquirerPy",
     ],
     entry_points={
