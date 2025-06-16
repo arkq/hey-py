@@ -11,7 +11,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from . import api
 from .config import Config, load_config
-from .cli import run_config
 
 
 @click.command(context_settings={"ignore_unknown_options": True})
@@ -39,6 +38,7 @@ def cli(args: tuple[str, ...], agree_tos: bool, quiet: bool, verbose: bool,
         hey config
     """
     if len(args) == 1 and args[0] == "config":
+        from .cli import run_config
         run_config()
         return
 
