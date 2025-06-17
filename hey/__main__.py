@@ -1,8 +1,6 @@
 """Main entry point for the hey CLI."""
 import argparse
-import os
 import sys
-import time
 from pathlib import Path
 
 import httpx
@@ -58,7 +56,7 @@ examples:
         config.prompt = args.prompt
         if args.save_prompt:
             config.save()
-            print(f"\033[32mSaved system prompt to config\033[0m")
+            print("\033[32mSaved system prompt to config\033[0m")
 
     if args.proxy:
         if not config.validate_proxy_url(args.proxy):
@@ -67,7 +65,7 @@ examples:
         config.proxy = args.proxy
         if args.save_prompt:
             config.save()
-            print(f"\033[32mSaved proxy settings to config\033[0m")
+            print("\033[32mSaved proxy settings to config\033[0m")
 
     if args.socks_proxy:
         if not config.validate_proxy_url(args.socks_proxy, allow_socks=True):
@@ -76,7 +74,7 @@ examples:
         config.socks_proxy = args.socks_proxy
         if args.save_prompt:
             config.save()
-            print(f"\033[32mSaved proxy settings to config\033[0m")
+            print("\033[32mSaved proxy settings to config\033[0m")
 
     config.verbose = args.verbose
 

@@ -2,10 +2,10 @@
 import json
 import os
 from collections import deque
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Deque, Dict
+from typing import Deque, Dict, List, Optional
 
 from .models import ChatMessage
 
@@ -31,10 +31,10 @@ class CachedMessage:
 
 
 class MessageCache:
-    
+
     def __init__(self, max_size: int = 10, expiry_hours: int = 24):
         """Initialize the message cache.
-        
+
         Args:
             max_size: Maximum number of messages to store
             expiry_hours: Number of hours after which messages expire
@@ -55,7 +55,7 @@ class MessageCache:
         try:
             cache_path = Path(self.get_cache_dir())
             cache_file = cache_path / self.get_cache_file()
-            
+
             if cache_file.exists():
                 with open(cache_file, 'r') as f:
                     data = json.load(f)
@@ -70,7 +70,7 @@ class MessageCache:
         try:
             cache_path = Path(self.get_cache_dir())
             cache_path.mkdir(parents=True, exist_ok=True)
-            
+
             cache_file = cache_path / self.get_cache_file()
             with open(cache_file, 'w') as f:
                 data = [msg.to_dict() for msg in self._messages]
@@ -94,7 +94,7 @@ class MessageCache:
     def _cleanup_expired(self) -> None:
         now = datetime.now()
         self._messages = deque(
-            (msg for msg in self._messages 
+            (msg for msg in self._messages
              if now - msg.timestamp <= self._expiry_delta),
             maxlen=self._messages.maxlen
         )
@@ -108,6 +108,7 @@ class MessageCache:
 
 # Global cache instance
 _cache: Optional[MessageCache] = None
+
 
 def get_cache() -> MessageCache:
     global _cache

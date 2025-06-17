@@ -2,14 +2,13 @@
 import json
 import sys
 import time
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 import httpx
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
-from rich.screen import Screen
 
 from .config import Config
 from .memory import get_cache

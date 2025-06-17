@@ -1,14 +1,15 @@
 """CLI configuration interface for hey."""
+import sys
+
 from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
-from InquirerPy.separator import Separator
 from rich.console import Console
-import sys
 
 from .config import Config, Model, load_config
 from .memory import get_cache
 
 console = Console()
+
 
 def configure_model(config: Config) -> None:
     """Configure the AI model."""
@@ -32,6 +33,7 @@ def configure_model(config: Config) -> None:
     config.model = model
     console.print(f"[green]Model set to: {config.model}[/]")
 
+
 def configure_prompt(config: Config) -> None:
     """Configure the system prompt."""
     console.print("Current prompt:", "[cyan]" + (config.prompt or "Not set") + "[/]")
@@ -53,6 +55,7 @@ def configure_prompt(config: Config) -> None:
             console.print(f"[green]System prompt set to: {config.prompt}[/]")
         else:
             console.print("[yellow]System prompt cleared[/]")
+
 
 def configure_proxy(config: Config) -> None:
     """Configure proxy settings."""
@@ -105,6 +108,7 @@ def configure_proxy(config: Config) -> None:
             config.socks_proxy = None
             console.print("[yellow]SOCKS proxy cleared[/]")
 
+
 def configure_tos(config: Config) -> None:
     """Configure Terms of Service acceptance."""
     if not config.tos:
@@ -123,6 +127,7 @@ def configure_tos(config: Config) -> None:
             console.print("[green]Terms of Service accepted[/]")
     else:
         console.print("[green]✓ Terms of Service already accepted[/]")
+
 
 def run_config() -> None:
     """Run the configuration interface."""
