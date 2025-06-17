@@ -9,6 +9,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from . import api
 from .config import Config, load_config
+from .memory import get_cache
 
 
 def main():
@@ -37,10 +38,19 @@ examples:
     parser.add_argument('args', nargs='*', help='chat query or "config" command')
     args = parser.parse_args()
 
-    if len(args.args) == 1 and args.args[0] == "config":
-        from .cli import run_config
-        run_config()
-        return
+    console = Console()
+    console_error = Console(stderr=True)
+
+    if len(args.args) == 1:
+        if args.args[0] == "config":
+            from .cli import run_config
+            run_config()
+            return
+        if args.args[0] == "clear":
+            cache = get_cache()
+            cache.clear()
+            console.print("[green]Message cache cleared[/]")
+            return
 
     config = load_config()
     if not config:
@@ -48,7 +58,7 @@ examples:
 
     if args.agree_tos:
         if not config.tos:
-            print("\033[32mTOS accepted\033[0m")
+            console.print("[green]Terms of Service accepted[/]")
         config.tos = True
         config.save()
 
@@ -56,43 +66,48 @@ examples:
         config.prompt = args.prompt
         if args.save_prompt:
             config.save()
-            print("\033[32mSaved system prompt to config\033[0m")
+            console.print(f"[green]System prompt saved[/]")
 
     if args.proxy:
         if not config.validate_proxy_url(args.proxy):
-            print(f"\033[31mInvalid HTTP proxy URL format: {args.proxy}\033[0m", file=sys.stderr)
+            console_error.print(
+                f"[bold red]Error:[/] Invalid HTTP proxy URL format: {args.proxy}")
             sys.exit(1)
         config.proxy = args.proxy
         if args.save_prompt:
             config.save()
-            print("\033[32mSaved proxy settings to config\033[0m")
+            console.print(f"[green]HTTP proxy saved[/]")
 
     if args.socks_proxy:
         if not config.validate_proxy_url(args.socks_proxy, allow_socks=True):
-            print(f"\033[31mInvalid SOCKS proxy URL format: {args.socks_proxy}\033[0m", file=sys.stderr)
+            console_error.print(
+                f"[bold red]Error:[/] Invalid SOCKS proxy URL format: {args.socks_proxy}")
             sys.exit(1)
         config.socks_proxy = args.socks_proxy
         if args.save_prompt:
             config.save()
-            print("\033[32mSaved proxy settings to config\033[0m")
+            console.print(f"[green]SOCKS proxy saved[/]")
 
     config.verbose = args.verbose
 
     if not config.tos:
-        print("\033[31mYou must agree to DuckDuckGo's Terms of Service to use this tool.\033[0m", file=sys.stderr)
-        print("Read them here: https://duckduckgo.com/terms", file=sys.stderr)
-        print("Once you read it, pass --agree-tos parameter to agree.", file=sys.stderr)
-        print(f"\033[33mNote: if you want to, modify `tos` parameter in {Path(Config.get_path()) / Config.get_file_name()}\033[0m",
-              file=sys.stderr)
+        console_error.print(
+            "[bold red]Error:[/] You must agree to DuckDuckGo's Terms of Service to use this tool")
+        console_error.print("Read them here: https://duckduckgo.com/terms")
+        console_error.print(
+            "Once you read it, pass --agree-tos parameter to agree.")
+        console_error.print(
+            f"[yellow]Note: if you want to, modify `tos` parameter in {Path(Config.get_path()) / Config.get_file_name()}[/]")
         sys.exit(3)
 
     if not sys.stdout.isatty():
-        print("This program must be run in a terminal", file=sys.stderr)
+        console_error.print(
+            "[bold red]Error:[/] This program must be run in a terminal")
         sys.exit(1)
 
     query_str = ' '.join(args.args)
     if not query_str:
-        print("Please provide a query", file=sys.stderr)
+        console_error.print("[bold red]Error:[/] Please provide a query")
         sys.exit(1)
 
     proxies = config.get_proxies()
@@ -110,7 +125,7 @@ examples:
             SpinnerColumn(),
             TextColumn("[bold blue]Initializing...[/]"),
             transient=True,  # Remove progress bar when done
-            console=Console(stderr=True),  # Show on stderr to not interfere with response
+            console=console_error,  # Show on stderr to not interfere with response
             disable=args.quiet,
         ) as progress:
             task = progress.add_task("", total=None)  # Indeterminate progress
@@ -121,8 +136,8 @@ examples:
             progress.update(task, description="[bold blue]Connecting to DuckDuckGo...[/]")
             api.get_response(client, query_str, vqd, config)
 
-    except Exception as e:
-        print(f"\033[31mError: {str(e)}\033[0m", file=sys.stderr)
+    except Exception:
+        console_error.print_exception()
         sys.exit(1)
     finally:
         client.close()

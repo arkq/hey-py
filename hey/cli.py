@@ -135,12 +135,6 @@ def run_config() -> None:
     if not config:
         config = Config()
 
-    if len(sys.argv) > 1 and sys.argv[1] == "--clear":
-        cache = get_cache()
-        cache.clear()
-        console.print("[green]Message cache cleared![/]")
-        return
-
     # Show current settings
     console.print("[bold blue]Current Settings:[/]")
     console.print(f"Model: [cyan]{config.model}[/]")
