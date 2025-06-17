@@ -64,8 +64,8 @@ def simulate_browser_reqs(client: httpx.Client, config: Config) -> None:
     return
 
 
-def get_vqd(client: httpx.Client, config: Config) -> str:
-    """Get the VQD token required for chat requests."""
+def get_vqd(client: httpx.Client, config: Config) -> tuple[str, str]:
+    """Get the VQD token and VQD hash required for chat requests."""
     simulate_browser_reqs(client, config)
 
     log_debug("Requesting VQD token...", config.verbose)
@@ -92,10 +92,14 @@ def get_vqd(client: httpx.Client, config: Config) -> str:
     if not vqd:
         raise ValueError("No VQD header returned")
     log_debug(f"Got VQD token: {vqd[:8]}...", config.verbose)
-    return vqd
+    vqd_hash = response.headers.get("x-vqd-hash-1")
+    if not vqd_hash:
+        raise ValueError("No VQD hash header returned")
+    log_debug(f"Got VQD hash: {vqd_hash[:13]}...", config.verbose)
+    return vqd, vqd_hash
 
 
-def get_response(client: httpx.Client, query: str, vqd: str, config: Config) -> None:
+def get_response(client: httpx.Client, query: str, vqd: tuple[str, str], config: Config) -> None:
     """Get chat response from DuckDuckGo."""
     cache = get_cache()
 
@@ -118,7 +122,8 @@ def get_response(client: httpx.Client, query: str, vqd: str, config: Config) -> 
     headers = get_headers()
     headers.update({
         "Content-Type": "application/json",
-        "x-vqd-4": vqd,
+        "x-vqd-4": vqd[0],
+        "x-vqd-hash-1": "initial",  # vqd[1],
         "Accept": "text/event-stream",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
