@@ -2,7 +2,7 @@
 import json
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Dict, Optional
 
 import httpx
@@ -107,22 +107,12 @@ def get_response(client: httpx.Client, query: str, vqd: str, config: Config) -> 
     user_message = ChatMessage(role="user", content=content)
     cache.add_message(user_message)
 
-    # prepare chat history
-    messages = cache.get_messages()
-
     payload = ChatPayload(
         model=config.model,
-        messages=messages,
+        # Load chat history from cache
+        messages=[ChatMessage(role=msg.role, content=msg.content)
+                  for msg in cache.get_messages()],
     )
-
-    # convert dataclass to dictionary for serialization
-    payload_dict = {
-        "model": payload.model,
-        "messages": [
-            {"role": msg.role, "content": msg.content}
-            for msg in payload.messages
-        ],
-    }
 
     # get headers and add needed headers
     headers = get_headers()
@@ -146,7 +136,7 @@ def get_response(client: httpx.Client, query: str, vqd: str, config: Config) -> 
         "POST",
         "https://duckduckgo.com/duckchat/v1/chat",
         headers=headers,
-        json=payload_dict,
+        json=asdict(payload),
         timeout=30.0
     ) as response:
         log_debug(f"Got initial response in {time.time() - start_time:.2f}s", config.verbose)
