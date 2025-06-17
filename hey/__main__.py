@@ -1,5 +1,6 @@
 """Main entry point for the hey CLI."""
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -119,6 +120,23 @@ examples:
         timeout=30.0,
         proxies=proxies or None
     )
+
+    if os.getenv('HEY_DEBUG'):
+
+        def log_request(request):
+            print(request)
+            print(request.headers)
+            print(request.content)
+
+        def log_response(response):
+            print(response)
+            print(response.headers)
+            print(response.read())
+
+        client.event_hooks = {
+            'request': [log_request],
+            'response': [log_response],
+        }
 
     try:
         with Progress(
