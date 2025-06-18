@@ -42,32 +42,10 @@ examples:
     console = Console()
     console_error = Console(stderr=True)
 
-    if len(args.args) == 1:
-        if args.args[0] == "config":
-            from .cli import run_config
-            run_config()
-            return
-        if args.args[0] == "clear":
-            cache = get_cache()
-            cache.clear()
-            console.print("[green]Message cache cleared[/]")
-            return
-
     config = load_config()
     if not config:
         config = Config()
-
-    if args.agree_tos:
-        if not config.tos:
-            console.print("[green]Terms of Service accepted[/]")
-        config.tos = True
-        config.save()
-
-    if args.prompt:
-        config.prompt = args.prompt
-        if args.save_prompt:
-            config.save()
-            console.print(f"[green]System prompt saved[/]")
+    config.verbose = args.verbose
 
     if args.proxy:
         if not config.validate_proxy_url(args.proxy):
@@ -89,30 +67,7 @@ examples:
             config.save()
             console.print(f"[green]SOCKS proxy saved[/]")
 
-    config.verbose = args.verbose
-
-    if not config.tos:
-        console_error.print(
-            "[bold red]Error:[/] You must agree to DuckDuckGo's Terms of Service to use this tool")
-        console_error.print("Read them here: https://duckduckgo.com/terms")
-        console_error.print(
-            "Once you read it, pass --agree-tos parameter to agree.")
-        console_error.print(
-            f"[yellow]Note: if you want to, modify `tos` parameter in {Path(Config.get_path()) / Config.get_file_name()}[/]")
-        sys.exit(3)
-
-    if not sys.stdout.isatty():
-        console_error.print(
-            "[bold red]Error:[/] This program must be run in a terminal")
-        sys.exit(1)
-
-    query_str = ' '.join(args.args)
-    if not query_str:
-        console_error.print("[bold red]Error:[/] Please provide a query")
-        sys.exit(1)
-
     proxies = config.get_proxies()
-
     client = httpx.Client(
         transport=httpx.HTTPTransport(retries=2),
         verify=True,
@@ -138,6 +93,49 @@ examples:
             'response': [log_response],
         }
 
+    if len(args.args) == 1:
+        if args.args[0] == "config":
+            from .cli import run_config
+            run_config(client)
+            return
+        if args.args[0] == "clear":
+            cache = get_cache()
+            cache.clear()
+            console.print("[green]Message cache cleared[/]")
+            return
+
+    if args.agree_tos:
+        if not config.tos:
+            console.print("[green]Terms of Service accepted[/]")
+        config.tos = True
+        config.save()
+
+    if args.prompt:
+        config.prompt = args.prompt
+        if args.save_prompt:
+            config.save()
+            console.print(f"[green]System prompt saved[/]")
+
+    if not config.tos:
+        console_error.print(
+            "[bold red]Error:[/] You must agree to DuckDuckGo's Terms of Service to use this tool")
+        console_error.print("Read them here: https://duckduckgo.com/terms")
+        console_error.print(
+            "Once you read it, pass --agree-tos parameter to agree.")
+        console_error.print(
+            f"[yellow]Note: if you want to, modify `tos` parameter in {Path(Config.get_path()) / Config.get_file_name()}[/]")
+        sys.exit(3)
+
+    if not sys.stdout.isatty():
+        console_error.print(
+            "[bold red]Error:[/] This program must be run in a terminal")
+        sys.exit(1)
+
+    query_str = ' '.join(args.args)
+    if not query_str:
+        console_error.print("[bold red]Error:[/] Please provide a query")
+        sys.exit(1)
+
     try:
         with Progress(
             SpinnerColumn(),
@@ -159,7 +157,3 @@ examples:
         sys.exit(1)
     finally:
         client.close()
-
-
-if __name__ == '__main__':
-    main()

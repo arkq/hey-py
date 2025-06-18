@@ -1,7 +1,6 @@
 """Configuration management for hey."""
 import os
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -9,20 +8,11 @@ from urllib.parse import urlparse
 import toml
 
 
-class Model(Enum):
-    """Available chat models."""
-    CLAUDE_3_HAIKU = "claude-3-haiku-20240307"  # Default model
-    GPT_4O_MINI = "gpt-4o-mini"
-    GPT_O4_MINI = "o4-mini"
-    LLAMA_3_3_70B = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-    MISTRAL_24B = "mistralai/Mistral-Small-24B-Instruct-2501"
-
-
 @dataclass
 class Config:
     """Configuration data."""
     tos: bool = False
-    model: str = Model.CLAUDE_3_HAIKU.value
+    model: str = "claude-3-haiku-20240307"
     prompt: Optional[str] = None  # System prompt to apply to all responses
     verbose: bool = False  # Whether to show debug logs
     proxy: Optional[str] = None  # HTTP/HTTPS proxy URL

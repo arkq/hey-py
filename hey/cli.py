@@ -1,26 +1,74 @@
 """CLI configuration interface for hey."""
-import sys
 
+import json
+import subprocess
+import re
+
+import httpx
 from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from rich.console import Console
 
 from .config import Config, Model, load_config
-from .memory import get_cache
 
 console = Console()
 
 
-def configure_model(config: Config) -> None:
+def configure_model(config: Config, client: httpx.Client) -> None:
     """Configure the AI model."""
-    models = [Choice(model.value, model.value) for model in Model]
-    current_model = next((i for i, m in enumerate(models) if m.value == config.model), 0)
-    models.append(Choice(None, "other..."))
+
+    models = []
+    response = client.get("https://duckduckgo.com/?q=DuckDuckGo+AI+Chat&ia=chat&duckai=1")
+    # Try to get the hash for the script which holds the model list.
+    if match := re.search(r"__DDG_FE_CHAT_HASH__\s*=\s*['\"](\w+)['\"]", response.text):
+        response = client.get(f"https://duckduckgo.com/dist/wpm.chat.{match.group(1)}.js")
+        # Try to get a script fragment that contains the model list.
+        if match := re.search(r"const \w+=\{model:.*?,(\w+)=\[\{model:.+?\}\];", response.text):
+            script = match.group(0)
+            # Replace internal availability references with simple strings.
+            script = re.sub(r"\w+\.Internal", '"INTERNAL"', script)
+            script = re.sub(r"\w+\.Plus", '"PLUS"', script)
+            script = re.sub(r"\w+\.Free", '"FREE"', script)
+            # Use node interpreter to evaluate the script and get the model list.
+            script += "console.log(JSON.stringify(" + match.group(1) + "))"
+            models = subprocess.check_output(["node", "-e", script], text=True)
+            models = json.loads(models)
+        else:
+            console.print("[red]Error:[/] Unable to find model list in script")
+    else:
+        console.print("[red]Error:[/] Unable to find model list script hash")
+
+    choices = []
+    default = None
+    for model in models:
+        label = model["modelName"]
+        if variant := model.get("modelVariant"):
+            label += f" ({variant})"
+        creator = model.get("createdBy", "").replace(" ", "-")
+        tags = []
+        oss = model.get("isOpenSource")
+        tags.append("open-source" if oss else "proprietary")
+        type = model.get("modelType")
+        if type == "general":
+            tags.append("general-purpose")
+        elif type == "reasoning":
+            tags.append("reasoning")
+        if level := model.get("moderationLevel"):
+            tags.append(f"{level.lower()}-moderation")
+        if "FREE" not in model.get("availableTo", []):
+            # If the model is not available for free, skip it.
+            continue
+        choice = Choice(model["model"], f"{label:20s} {creator:10s} [{" ".join(tags)}]")
+        if choice.value == config.model:
+            default = choice
+        choices.append(choice)
+
+    choices.append(Choice(None, "other..."))
 
     model = inquirer.select(
         message="Select AI Model:",
-        choices=models,
-        default=models[current_model],
+        choices=choices,
+        default=default,
         qmark="🤖",
     ).execute()
 
@@ -129,7 +177,7 @@ def configure_tos(config: Config) -> None:
         console.print("[green]✓ Terms of Service already accepted[/]")
 
 
-def run_config() -> None:
+def run_config(client: httpx.Client) -> None:
     """Run the configuration interface."""
     config = load_config()
     if not config:
@@ -146,7 +194,7 @@ def run_config() -> None:
 
     # Configure each setting
     configure_tos(config)
-    configure_model(config)
+    configure_model(config, client)
     configure_prompt(config)
     configure_proxy(config)
 
@@ -160,7 +208,3 @@ def run_config() -> None:
         console.print("[green]Configuration saved successfully![/]")
     else:
         console.print("[yellow]Changes discarded[/]")
-
-
-if __name__ == "__main__":
-    run_config()
