@@ -8,7 +8,7 @@ import httpx
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from . import api
+from .api import DuckAI
 from .config import Config, load_config
 from .memory import get_cache
 
@@ -136,6 +136,8 @@ examples:
         console_error.print("[bold red]Error:[/] Please provide a query")
         sys.exit(1)
 
+    api = DuckAI(client, config)
+
     try:
         with Progress(
             SpinnerColumn(),
@@ -147,10 +149,10 @@ examples:
             task = progress.add_task("", total=None)  # Indeterminate progress
 
             progress.update(task, description="[bold blue]Getting verification token...[/]")
-            vqd = api.get_vqd(client, config)
+            vqd = api.get_vqd()
 
             progress.update(task, description="[bold blue]Connecting to DuckDuckGo...[/]")
-            api.get_response(client, query_str, vqd, config)
+            api.get_response(query_str, vqd)
 
     except Exception:
         console_error.print_exception()
