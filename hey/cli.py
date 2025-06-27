@@ -1,8 +1,8 @@
 """CLI configuration interface for hey."""
 
 import json
-import subprocess
 import re
+import subprocess
 
 import httpx
 from InquirerPy import inquirer

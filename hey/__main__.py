@@ -6,6 +6,8 @@ from pathlib import Path
 
 import httpx
 from rich.console import Console
+from rich.live import Live
+from rich.markdown import Markdown
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from .api import DuckAI
@@ -153,7 +155,16 @@ examples:
             vqd = api.get_vqd()
 
             progress.update(task, description="[bold blue]Connecting to DuckDuckGo...[/]")
-            api.get_response(query_str, vqd)
+
+            response = ""
+            with Live(Markdown(""), console=console, refresh_per_second=4) as live:
+                for chunk in api.get_response(query_str, vqd):
+                    if chunk.action == "error":
+                        print(f"\033[31mError obtaining response\033[0m",
+                              chunk.message, file=sys.stderr)
+                        sys.exit(1)
+                    response += chunk.message
+                    live.update(Markdown(response))
 
     except Exception:
         console_error.print_exception()

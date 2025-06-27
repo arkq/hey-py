@@ -1,14 +1,10 @@
 """DuckDuckGo Chat API client implementation."""
 import json
-import sys
-import time
-from dataclasses import dataclass, asdict
-from typing import Optional
+import logging
+from dataclasses import asdict, dataclass
+from typing import Iterable, Optional
 
 import httpx
-from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
 
 from .cache import MessageCache
 from .config import Config
@@ -18,26 +14,13 @@ from .models import ChatMessage, ChatPayload
 @dataclass
 class ChatChunk:
     """Chat response chunk structure."""
-    role: Optional[str]
+    action: str
     message: str
-    created: int
-    action: str
-    id: Optional[str]
-    model: Optional[str]
-
-
-@dataclass
-class ErrorChatChunk:
-    """Error response chunk structure."""
-    action: str
-    status: int
-    err_type: str
-
-
-def log_debug(msg: str, verbose: bool = False) -> None:
-    """Print debug message with timestamp."""
-    if verbose:
-        print(f"\033[36m[{time.strftime('%H:%M:%S')}] {msg}\033[0m", file=sys.stderr)
+    role: Optional[str] = None
+    created: Optional[int] = None
+    model: Optional[str] = None
+    status: Optional[int] = None
+    id: Optional[str] = None
 
 
 class DuckAI:
@@ -55,19 +38,17 @@ class DuckAI:
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br",
-            "DNT": "1",
             "Connection": "keep-alive",
-            "Cookie": "ax=v309-3",
+            "Cookie": "dsc=1;dcm=3",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
-            "TE": "trailers"
         }
 
     def get_vqd(self) -> tuple[str, str]:
         """Get the VQD token and VQD hash required for chat requests."""
 
-        log_debug("Requesting VQD token...", self.config.verbose)
+        logging.debug("Requesting VQD token")
         headers = self._get_common_headers()
         headers.update({
             "Cache-Control": "no-store",
@@ -90,14 +71,14 @@ class DuckAI:
         vqd = response.headers.get("x-vqd-4")
         if not vqd:
             raise ValueError("No VQD header returned")
-        log_debug(f"Got VQD token: {vqd[:8]}...", self.config.verbose)
+        logging.debug("Got VQD token: %s", vqd)
         vqd_hash = response.headers.get("x-vqd-hash-1")
         if not vqd_hash:
             raise ValueError("No VQD hash header returned")
-        log_debug(f"Got VQD hash: {vqd_hash[:13]}...", self.config.verbose)
+        logging.debug("Got VQD hash: %s", vqd_hash)
         return vqd, vqd_hash
 
-    def get_response(self, query: str, vqd: tuple[str, str]) -> None:
+    def get_response(self, query: str, vqd: tuple[str, str]) -> Iterable[ChatChunk]:
         """Get chat response from DuckDuckGo."""
 
         content = ""
@@ -105,8 +86,8 @@ class DuckAI:
             content = self.config.prompt + ": "
         content += query
 
-        user_message = ChatMessage(role="user", content=content)
-        self.cache.add_message(user_message)
+        message = ChatMessage(role="user", content=content)
+        self.cache.add_message(message)
 
         payload = ChatPayload(
             model=self.config.model,
@@ -124,16 +105,14 @@ class DuckAI:
             "Accept": "text/event-stream",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
-            "Referer": "https://duckduckgo.com/?q=duckduckgo+ai+chat&ia=chat",
+            "Referer": "https://duckduckgo.com/",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
             "Origin": "https://duckduckgo.com",
         })
 
-        log_debug("Sending chat request...", self.config.verbose)
-        start_time = time.time()
-
+        logging.debug("Sending chat request")
         with self.client.stream(
             "POST",
             "https://duckduckgo.com/duckchat/v1/chat",
@@ -141,55 +120,43 @@ class DuckAI:
             json=asdict(payload),
             timeout=30.0
         ) as response:
-            log_debug(
-                f"Got initial response in {time.time() - start_time:.2f}s", self.config.verbose)
 
             new_vqd = response.headers.get("x-vqd-4")
             if new_vqd:
-                log_debug(f"Got new VQD token: {new_vqd[:8]}...", self.config.verbose)
+                logging.debug("Got new VQD token: %s", new_vqd)
             else:
-                print("\033[33mWarn: DuckDuckGo did not return new VQD. Ignore this if everything else is ok.\033[0m",
-                      file=sys.stderr)
+                logging.warning("No new VQD token returned")
 
-            console = Console()
-            current_response = ""
+            content = ""
+            logging.debug("Starting response stream")
+            for line in response.iter_lines():
+                if not line:
+                    continue
 
-            log_debug("Starting response stream...", self.config.verbose)
-            # live display
-            with Live(Markdown(current_response), console=console, refresh_per_second=4) as live:
-                chunk_count = 0
-                last_update = time.time()
-                complete_response = ""
+                try:
+                    data = json.loads(line.removeprefix("data: "))
+                except json.JSONDecodeError:
+                    continue
 
-                for line in response.iter_lines():
-                    if not line:
-                        continue
+                if data.get("action") == "success" and data.get("message"):
+                    content += data["message"]
+                    yield ChatChunk(
+                        action=data["action"],
+                        message=data["message"],
+                        role=data.get("role"),
+                        created=data.get("created"),
+                        model=data.get("model"),
+                        id=data.get("id")
+                    )
+                if data.get("action") == "error":
+                    yield ChatChunk(
+                        action=data["action"],
+                        message=data["type"],
+                        status=data["status"],
+                    )
 
-                    try:
-                        data = json.loads(line.removeprefix("data: "))
+            logging.debug("Response stream completed")
 
-                        if data.get("action") == "error":
-                            print(f"\033[31mError obtaining response: {data.get('status')} - {data.get('type')}\033[0m",
-                                  file=sys.stderr)
-                            sys.exit(1)
-
-                        if "message" in data:
-                            chunk_count += 1
-                            if time.time() - last_update >= 1.0:  # Log every second
-                                log_debug(f"Received {chunk_count} chunks...", self.config.verbose)
-                                last_update = time.time()
-
-                            message = data["message"]
-                            current_response += message
-                            complete_response += message
-                            live.update(Markdown(current_response))
-
-                    except json.JSONDecodeError:
-                        continue
-
-            log_debug("Response complete", self.config.verbose)
-
-            if complete_response and not data.get("action") == "error":
-                assistant_message = ChatMessage(
-                    role="user", content=f"your answer: {complete_response}")
-                self.cache.add_message(assistant_message)
+            if message:
+                message = ChatMessage(role="assistant", content=content.strip())
+                self.cache.add_message(message)
