@@ -1,14 +1,13 @@
 """Main entry point for the hey CLI."""
 import argparse
+import logging
 import os
 import sys
-from pathlib import Path
 
 import httpx
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from .api import DuckAI
 from .cache import MessageCache
@@ -32,42 +31,43 @@ examples:
     hey config
 """)
     parser.add_argument('--agree-tos', action='store_true', help='agree to the DuckDuckGo TOS')
-    parser.add_argument('--quiet', '-q', action='store_true', help='do not show progress meter')
     parser.add_argument('--verbose', '-v', action='store_true', help='enable verbose logging')
     parser.add_argument('--prompt', '-p', help='set a system prompt for all responses')
-    parser.add_argument('--save-prompt', action='store_true', help='save the provided prompt to config')
-    parser.add_argument('--proxy', metavar='URL', help='HTTP/HTTPS proxy URL (e.g., http://proxy:8080)')
-    parser.add_argument('--socks-proxy', metavar='URL', help='SOCKS proxy URL (e.g., socks5://proxy:1080)')
+    parser.add_argument('--proxy', metavar='URL',
+                        help='HTTP/HTTPS proxy URL (e.g., http://proxy:8080)')
+    parser.add_argument('--socks-proxy', metavar='URL',
+                        help='SOCKS proxy URL (e.g., socks5://proxy:1080)')
+    parser.add_argument('--save', action='store_true',
+                        help='save provided proxy and/or prompt to config')
     parser.add_argument('args', nargs='*', help='chat query or "config" command')
     args = parser.parse_args()
 
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
     console = Console()
-    console_error = Console(stderr=True)
 
     config = load_config()
     if not config:
         config = Config()
-    config.verbose = args.verbose
 
     if args.proxy:
         if not config.validate_proxy_url(args.proxy):
-            console_error.print(
-                f"[bold red]Error:[/] Invalid HTTP proxy URL format: {args.proxy}")
-            sys.exit(1)
+            logging.error("Invalid HTTP proxy URL format: %s", args.proxy)
+            return 1
         config.proxy = args.proxy
-        if args.save_prompt:
+        if args.save:
             config.save()
-            console.print(f"[green]HTTP proxy saved[/]")
+            logging.info("HTTP proxy saved")
 
     if args.socks_proxy:
         if not config.validate_proxy_url(args.socks_proxy, allow_socks=True):
-            console_error.print(
-                f"[bold red]Error:[/] Invalid SOCKS proxy URL format: {args.socks_proxy}")
-            sys.exit(1)
+            logging.error("Invalid SOCKS proxy URL format: %s", args.socks_proxy)
+            return 1
         config.socks_proxy = args.socks_proxy
-        if args.save_prompt:
+        if args.save:
             config.save()
-            console.print(f"[green]SOCKS proxy saved[/]")
+            logging.info("SOCKS proxy saved")
 
     cache = MessageCache()
 
@@ -80,23 +80,6 @@ examples:
         proxies=proxies or None
     )
 
-    if os.getenv('HEY_DEBUG'):
-
-        def log_request(request):
-            print(request)
-            print(request.headers)
-            print(request.content)
-
-        def log_response(response):
-            print(response)
-            print(response.headers)
-            print(response.read())
-
-        client.event_hooks = {
-            'request': [log_request],
-            'response': [log_response],
-        }
-
     if len(args.args) == 1:
         if args.args[0] == "config":
             from .cli import run_config
@@ -104,70 +87,46 @@ examples:
             return
         if args.args[0] == "clear":
             cache.clear()
-            console.print("[green]Message cache cleared[/]")
+            console.print("Message history cache cleared.")
             return
 
     if args.agree_tos:
         if not config.tos:
-            console.print("[green]Terms of Service accepted[/]")
+            logging.info("DuckDuckGo Terms of Service accepted")
         config.tos = True
         config.save()
 
     if args.prompt:
         config.prompt = args.prompt
-        if args.save_prompt:
+        if args.save:
             config.save()
-            console.print(f"[green]System prompt saved[/]")
+            logging.info("System prompt saved")
 
     if not config.tos:
-        console_error.print(
+        console.print(
             "[bold red]Error:[/] You must agree to DuckDuckGo's Terms of Service to use this tool")
-        console_error.print("Read them here: https://duckduckgo.com/terms")
-        console_error.print(
-            "Once you read it, pass --agree-tos parameter to agree.")
-        console_error.print(
-            f"[yellow]Note: if you want to, modify `tos` parameter in {Path(Config.get_path()) / Config.get_file_name()}[/]")
-        sys.exit(3)
+        console.print("Read them here: https://duckduckgo.com/terms")
+        console.print("Once you read it, pass --agree-tos parameter to agree.")
+        return 3
 
     if not sys.stdout.isatty():
-        console_error.print(
-            "[bold red]Error:[/] This program must be run in a terminal")
-        sys.exit(1)
+        logging.error("This program must be run in a terminal")
+        return 1
 
     query_str = ' '.join(args.args)
     if not query_str:
-        console_error.print("[bold red]Error:[/] Please provide a query")
-        sys.exit(1)
+        logging.error("No query provided")
+        return 2
 
     api = DuckAI(client, cache, config)
 
-    try:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]Initializing...[/]"),
-            transient=True,  # Remove progress bar when done
-            console=console_error,  # Show on stderr to not interfere with response
-            disable=args.quiet,
-        ) as progress:
-            task = progress.add_task("", total=None)  # Indeterminate progress
+    vqd = api.get_vqd()
 
-            progress.update(task, description="[bold blue]Getting verification token...[/]")
-            vqd = api.get_vqd()
-
-            progress.update(task, description="[bold blue]Connecting to DuckDuckGo...[/]")
-
-            response = ""
-            with Live(Markdown(""), console=console, refresh_per_second=4) as live:
-                for chunk in api.get_response(query_str, vqd):
-                    if chunk.action == "error":
-                        print(f"\033[31mError obtaining response\033[0m",
-                              chunk.message, file=sys.stderr)
-                        sys.exit(1)
-                    response += chunk.message
-                    live.update(Markdown(response))
-
-    except Exception:
-        console_error.print_exception()
-        sys.exit(1)
-    finally:
-        client.close()
+    response = ""
+    with Live(Markdown(""), console=console, refresh_per_second=4) as live:
+        for chunk in api.get_response(query_str, vqd):
+            if chunk.action == "error":
+                logging.warning("Error in response: %d - %s", chunk.status, chunk.message)
+                continue
+            response += chunk.message
+            live.update(Markdown(response))

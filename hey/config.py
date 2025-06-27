@@ -14,7 +14,6 @@ class Config:
     tos: bool = False
     model: str = "claude-3-haiku-20240307"
     prompt: Optional[str] = None  # System prompt to apply to all responses
-    verbose: bool = False  # Whether to show debug logs
     proxy: Optional[str] = None  # HTTP/HTTPS proxy URL
     socks_proxy: Optional[str] = None  # SOCKS proxy URL
 
