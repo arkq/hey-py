@@ -1,4 +1,5 @@
 """DuckDuckGo Chat API client implementation."""
+import base64
 import json
 import logging
 from dataclasses import asdict, dataclass
@@ -29,56 +30,55 @@ class DuckAI:
         self.client = client
         self.cache = cache
         self.config = config
+        self.vqd_js = None
 
     def _get_common_headers(self):
         """Get the required headers for API requests."""
         return {
             "Host": "duckduckgo.com",
-            "Accept": "text/event-stream",
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0",
             "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
+            "Referer": "https://duckduckgo.com/",
             "Cookie": "dsc=1;dcm=3",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
         }
 
-    def get_vqd(self) -> tuple[str, str]:
-        """Get the VQD token and VQD hash required for chat requests."""
+    def _get_new_vqd_hash(self):
+        """Get VQD for new query request."""
 
-        logging.debug("Requesting VQD token")
-        headers = self._get_common_headers()
-        headers.update({
-            "Cache-Control": "no-store",
-            "x-vqd-accept": "1",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1"
-        })
+        if not self.vqd_js:
+            logging.debug("Requesting VQD token")
+            headers = self._get_common_headers()
+            headers.update({"X-Vqd-Accept": "1"})
+            response = self.client.get(
+                "https://duckduckgo.com/duckchat/v1/status",
+                headers=headers,
+                follow_redirects=True,
+                timeout=10.0)
+            if vqd := response.headers.get("x-vqd-hash-1"):
+                self.vqd_js = base64.b64decode(vqd).decode()
 
-        response = self.client.get(
-            "https://duckduckgo.com/duckchat/v1/status",
-            headers=headers,
-            follow_redirects=True,
-            timeout=10.0
-        )
+        print(self.vqd_js)
+        print()
+        vqd = {
+            "server_hashes": ["lVt4Injv8FW1BWfZCTLXW3i2F1usJ4u+RswgnPcLGVs=", "r87Zdv2s2OTf5gUrcImjcVxxIrZfYors0KamjE4NRy8="],
+            "client_hashes": ["RH8kVmQ0tWDb4s9IertKzuftJVtcVaprwe69RYY6VJA=", "J7PiZdvcIPW5dYl2+0YLlpPKGzcer3AFRbH1U9Ms+fE="],
+            "signals": {},
+            "meta": {
+                "v": "3",
+                "challenge_id": "b2ec54d2285e1fa72e533168930cc5cde7529646e8e5aaa50f0928aa3bfc5de7h8jbt",
+                "timestamp": "1751031618231",
+                "origin": "https://duckduckgo.com",
+                "duration": "2",
+            }
+        }
 
-        vqd = response.headers.get("x-vqd-4")
-        if not vqd:
-            raise ValueError("No VQD header returned")
-        logging.debug("Got VQD token: %s", vqd)
-        vqd_hash = response.headers.get("x-vqd-hash-1")
-        if not vqd_hash:
-            raise ValueError("No VQD hash header returned")
-        logging.debug("Got VQD hash: %s", vqd_hash)
-        return vqd, vqd_hash
+        data = json.dumps(vqd, separators=(',', ':'))
+        return base64.b64encode(data.encode()).decode()
 
-    def get_response(self, query: str, vqd: tuple[str, str]) -> Iterable[ChatChunk]:
+    def query(self, query: str) -> Iterable[ChatChunk]:
         """Get chat response from DuckDuckGo."""
 
         content = ""
@@ -96,20 +96,12 @@ class DuckAI:
                       for msg in self.cache.get_messages()],
         )
 
-        # get headers and add needed headers
         headers = self._get_common_headers()
         headers.update({
-            "Content-Type": "application/json",
-            "x-vqd-4": vqd[0],
-            "x-vqd-hash-1": "initial",  # vqd[1],
             "Accept": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-            "Referer": "https://duckduckgo.com/",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
+            "Content-Type": "application/json",
             "Origin": "https://duckduckgo.com",
+            "X-Vqd-Hash-1": self._get_new_vqd_hash(),
         })
 
         logging.debug("Sending chat request")
@@ -121,11 +113,8 @@ class DuckAI:
             timeout=30.0
         ) as response:
 
-            new_vqd = response.headers.get("x-vqd-4")
-            if new_vqd:
-                logging.debug("Got new VQD token: %s", new_vqd)
-            else:
-                logging.warning("No new VQD token returned")
+            if vqd := response.headers.get("x-vqd-hash-1"):
+                self.vqd_js = base64.b64decode(vqd).decode()
 
             content = ""
             logging.debug("Starting response stream")

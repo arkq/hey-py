@@ -1,7 +1,6 @@
 """Main entry point for the hey CLI."""
 import argparse
 import logging
-import os
 import sys
 
 import httpx
@@ -113,18 +112,16 @@ examples:
         logging.error("This program must be run in a terminal")
         return 1
 
-    query_str = ' '.join(args.args)
-    if not query_str:
+    query = ' '.join(args.args)
+    if not query:
         logging.error("No query provided")
         return 2
 
     api = DuckAI(client, cache, config)
 
-    vqd = api.get_vqd()
-
     response = ""
     with Live(Markdown(""), console=console, refresh_per_second=4) as live:
-        for chunk in api.get_response(query_str, vqd):
+        for chunk in api.query(query):
             if chunk.action == "error":
                 logging.warning("Error in response: %d - %s", chunk.status, chunk.message)
                 continue
