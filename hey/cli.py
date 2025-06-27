@@ -9,7 +9,7 @@ from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from rich.console import Console
 
-from .config import Config, Model, load_config
+from .config import Config, load_config
 
 console = Console()
 

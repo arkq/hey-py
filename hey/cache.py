@@ -5,7 +5,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Deque, Dict, List, Optional
+from typing import Deque, Dict, List
 
 from .models import ChatMessage
 
@@ -104,14 +104,3 @@ class MessageCache:
     def size(self) -> int:
         self._cleanup_expired()
         return len(self._messages)
-
-
-# Global cache instance
-_cache: Optional[MessageCache] = None
-
-
-def get_cache() -> MessageCache:
-    global _cache
-    if _cache is None:
-        _cache = MessageCache()
-    return _cache

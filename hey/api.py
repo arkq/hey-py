@@ -10,8 +10,8 @@ from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
 
+from .cache import MessageCache
 from .config import Config
-from .memory import get_cache
 from .models import ChatMessage, ChatPayload
 
 
@@ -42,8 +42,9 @@ def log_debug(msg: str, verbose: bool = False) -> None:
 
 class DuckAI:
 
-    def __init__(self, client: httpx.Client, config: Config):
+    def __init__(self, client: httpx.Client, cache: MessageCache, config: Config):
         self.client = client
+        self.cache = cache
         self.config = config
 
     def _get_common_headers(self):
@@ -98,7 +99,6 @@ class DuckAI:
 
     def get_response(self, query: str, vqd: tuple[str, str]) -> None:
         """Get chat response from DuckDuckGo."""
-        cache = get_cache()
 
         content = ""
         if self.config.prompt:
@@ -106,13 +106,13 @@ class DuckAI:
         content += query
 
         user_message = ChatMessage(role="user", content=content)
-        cache.add_message(user_message)
+        self.cache.add_message(user_message)
 
         payload = ChatPayload(
             model=self.config.model,
             # Load chat history from cache
             messages=[ChatMessage(role=msg.role, content=msg.content)
-                      for msg in cache.get_messages()],
+                      for msg in self.cache.get_messages()],
         )
 
         # get headers and add needed headers
@@ -192,4 +192,4 @@ class DuckAI:
             if complete_response and not data.get("action") == "error":
                 assistant_message = ChatMessage(
                     role="user", content=f"your answer: {complete_response}")
-                cache.add_message(assistant_message)
+                self.cache.add_message(assistant_message)

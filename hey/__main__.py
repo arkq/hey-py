@@ -9,8 +9,8 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from .api import DuckAI
+from .cache import MessageCache
 from .config import Config, load_config
-from .memory import get_cache
 
 
 def main():
@@ -67,6 +67,8 @@ examples:
             config.save()
             console.print(f"[green]SOCKS proxy saved[/]")
 
+    cache = MessageCache()
+
     proxies = config.get_proxies()
     client = httpx.Client(
         transport=httpx.HTTPTransport(retries=2),
@@ -99,7 +101,6 @@ examples:
             run_config(client)
             return
         if args.args[0] == "clear":
-            cache = get_cache()
             cache.clear()
             console.print("[green]Message cache cleared[/]")
             return
@@ -136,7 +137,7 @@ examples:
         console_error.print("[bold red]Error:[/] Please provide a query")
         sys.exit(1)
 
-    api = DuckAI(client, config)
+    api = DuckAI(client, cache, config)
 
     try:
         with Progress(
