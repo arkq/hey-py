@@ -1,13 +1,14 @@
 # hey-py
 
-Python port of [hey](https://github.com/b1ek/hey), a command-line interface for DuckDuckGo's AI Chat with enhanced features.
+Python port of [hey](https://github.com/b1ek/hey), a command-line interface
+for DuckDuckGo's AI Chat with enhanced features.
 
 ## ✨ Features
 
 ### 🤖 AI Models
 
-- Multiple model support
-- Customizable system prompts
+- All models supported by [duck.ai](https://duck.ai)
+- Customizable system prompt
 
 ### 💬 Chat Experience
 
@@ -15,7 +16,7 @@ Python port of [hey](https://github.com/b1ek/hey), a command-line interface for 
 - Conversation memory with auto-expiry
   - Stores last 10 messages
   - 24-hour automatic expiration
-  - Manual clearing with `hey --clear`
+  - Manual clearing with `hey clear`
   - Persistent storage in `~/.cache/hey`
 - Real-time streaming responses
 
@@ -44,13 +45,6 @@ hey What is Python?
 # Clear conversation history
 hey clear
 ```
-
-### Configuration Options
-
-- Select AI model
-- Set system prompt
-- Configure proxy settings
-- Accept Terms of Service
 
 ### Environment Variables
 

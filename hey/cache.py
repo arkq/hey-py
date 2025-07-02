@@ -1,4 +1,3 @@
-"""Message caching system for hey."""
 import json
 import os
 from collections import deque

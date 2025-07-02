@@ -1,5 +1,3 @@
-"""CLI configuration interface for hey."""
-
 import json
 import re
 import subprocess

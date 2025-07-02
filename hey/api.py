@@ -1,4 +1,3 @@
-"""DuckDuckGo Chat API client implementation."""
 import base64
 import hashlib
 import json

@@ -1,4 +1,3 @@
-"""Main entry point for the hey CLI."""
 import argparse
 import logging
 import sys
@@ -28,6 +27,8 @@ examples:
 
     # Configure settings
     hey config
+    # Clear message history cache
+    hey clear
 """)
     parser.add_argument('--agree-tos', action='store_true', help='agree to the DuckDuckGo TOS')
     parser.add_argument('--verbose', '-v', action='store_true', help='enable verbose logging')
