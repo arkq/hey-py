@@ -51,7 +51,6 @@ hey clear
 - `HEY_CONFIG_PATH`: Custom config directory (default: `~/.config/hey`)
 - `HEY_CACHE_PATH`: Custom cache directory (default: `~/.cache/hey`)
 - `HEY_CONFIG_FILENAME`: Custom config filename (default: `conf.toml`)
-- `HEY_CACHE_FILENAME`: Custom cache filename (default: `messages.json`)
 
 ## 📝 License
 

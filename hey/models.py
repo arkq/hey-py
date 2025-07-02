@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import List
 
 
 @dataclass
@@ -24,6 +23,6 @@ class ChatMetadata:
 @dataclass
 class ChatPayload:
     model: str
-    messages: List[ChatMessage]
+    messages: list[ChatMessage]
     metadata: ChatMetadata = field(default_factory=ChatMetadata)
     canUseTools: bool = False
