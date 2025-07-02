@@ -4,13 +4,18 @@ import json
 import logging
 import subprocess
 from dataclasses import asdict, dataclass
+from datetime import datetime
+from threading import Thread
 from typing import Iterable, Optional
 
 import httpx
 
-from .cache import MessageCache
+from .cache import Cache
 from .config import Config
 from .models import ChatMessage, ChatPayload
+
+
+logger = logging.getLogger("hey")
 
 
 @dataclass
@@ -19,7 +24,7 @@ class ChatChunk:
     action: str
     message: str
     role: Optional[str] = None
-    created: Optional[int] = None
+    created: Optional[datetime] = None
     model: Optional[str] = None
     status: Optional[int] = None
     id: Optional[str] = None
@@ -27,7 +32,7 @@ class ChatChunk:
 
 class DuckAI:
 
-    def __init__(self, client: httpx.Client, cache: MessageCache, config: Config):
+    def __init__(self, client: httpx.Client, cache: Cache, config: Config):
         self.client = client
         self.cache = cache
         self.config = config
@@ -46,11 +51,11 @@ class DuckAI:
             "Sec-Fetch-Site": "same-origin",
         }
 
-    def _get_new_vqd_hash(self):
+    def _get_vqd_hash(self):
         """Get VQD for new query request."""
 
         if not self.vqd_js:
-            logging.debug("Requesting VQD token")
+            logger.debug("Requesting VQD token")
             headers = self._get_common_headers()
             headers.update({"X-Vqd-Accept": "1"})
             response = self.client.get(
@@ -64,13 +69,16 @@ class DuckAI:
         script = [
             "const navigator = new (require('node-navigator').Navigator)();",
             "const DOM = new (require('jsdom').JSDOM)('<html/>');",
-            "const document = DOM.window.document;",
+            "const window = DOM.window;",
+            "const document = window.document;",
             f"console.log(JSON.stringify({self.vqd_js}, null, 0));"]
+        logger.debug("Generating VQD hash with script: %s", "".join(script))
         vqd = json.loads(subprocess.check_output(["node", "-e", "".join(script)]))
         for i, data in enumerate(vqd["client_hashes"]):
             vqd["client_hashes"][i] = base64.b64encode(
                 hashlib.sha256(data.encode()).digest()).decode()
 
+        logger.debug("VQD hash generated")
         data = json.dumps(vqd, separators=(',', ':'))
         return base64.b64encode(data.encode()).decode()
 
@@ -92,15 +100,19 @@ class DuckAI:
                       for msg in self.cache.get_messages()],
         )
 
+        vqd_hash = (
+            self.cache.get_vqd_hash()
+            or self._get_vqd_hash())
+
         headers = self._get_common_headers()
         headers.update({
             "Accept": "text/event-stream",
             "Content-Type": "application/json",
             "Origin": "https://duckduckgo.com",
-            "X-Vqd-Hash-1": self._get_new_vqd_hash(),
+            "X-Vqd-Hash-1": vqd_hash,
         })
 
-        logging.debug("Sending chat request")
+        logger.debug("Sending chat request")
         with self.client.stream(
             "POST",
             "https://duckduckgo.com/duckchat/v1/chat",
@@ -109,11 +121,17 @@ class DuckAI:
             timeout=30.0
         ) as response:
 
+            def precache_vqd_hash():
+                """Pre-cache VQD hash in a separate thread."""
+                self.cache.set_vqd_hash(self._get_vqd_hash())
+
             if vqd := response.headers.get("x-vqd-hash-1"):
                 self.vqd_js = base64.b64decode(vqd).decode()
+                thread = Thread(target=precache_vqd_hash)
+                thread.start()
 
             content = ""
-            logging.debug("Starting response stream")
+            logger.debug("Starting response stream")
             for line in response.iter_lines():
                 if not line:
                     continue
@@ -129,7 +147,7 @@ class DuckAI:
                         action=data["action"],
                         message=data["message"],
                         role=data.get("role"),
-                        created=data.get("created"),
+                        created=datetime.fromtimestamp(data.get("created")),
                         model=data.get("model"),
                         id=data.get("id")
                     )
@@ -140,8 +158,12 @@ class DuckAI:
                         status=data["status"],
                     )
 
-            logging.debug("Response stream completed")
+            logger.debug("Response stream completed")
 
-            if message:
-                message = ChatMessage(role="assistant", content=content.strip())
-                self.cache.add_message(message)
+            if content:
+                self.cache.add_message(ChatMessage(
+                    role="assistant",
+                    content=content.strip(),
+                ))
+            if vqd:
+                thread.join()
