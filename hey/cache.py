@@ -1,5 +1,7 @@
+import base64
 import json
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -51,6 +53,7 @@ class Cache:
         self._messages: list[CachedMessage] = []
         self._expiry_delta = timedelta(hours=expiry_hours)
         self._max_size = max_size
+        self._vqd_hash_ts = 0.0
         self._vqd_hash = None
         self.load()
 
@@ -71,7 +74,7 @@ class Cache:
             print(f"Warning: Failed to load message cache: {e}")
         try:
             with open(self.get_vqd_cache_file()) as f:
-                self._vqd_hash = f.read().strip()
+                self.set_vqd_hash(f.read().strip())
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -106,7 +109,12 @@ class Cache:
         ]
 
     def get_vqd_hash(self):
-        return self._vqd_hash
+        # Return VQD hash only if it is recent enough.
+        if time.time() - self._vqd_hash_ts <= 3600:
+            return self._vqd_hash
+        return None
 
     def set_vqd_hash(self, vqd_hash: str):
+        data = json.loads(base64.b64decode(vqd_hash))
+        self._vqd_hash_ts = int(data['meta']['timestamp']) / 1000
         self._vqd_hash = vqd_hash
