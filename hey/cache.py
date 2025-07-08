@@ -89,8 +89,9 @@ class Cache:
         except Exception as e:
             print(f"Warning: Failed to save message cache: {e}")
         try:
-            with open(self.get_vqd_cache_file(), 'w') as f:
-                f.write(self._vqd_hash or "")
+            if self._vqd_hash:
+                with open(self.get_vqd_cache_file(), 'w') as f:
+                    f.write(self._vqd_hash)
         except Exception as e:
             print(f"Warning: Failed to save VQD hash: {e}")
 
@@ -100,12 +101,12 @@ class Cache:
     def add_message(self, message: ChatMessage):
         self._messages.append(CachedMessage(datetime.now(), message))
 
-    def get_messages(self) -> list[ChatMessage]:
+    def get_messages(self, truncate=True) -> list[ChatMessage]:
         now = datetime.now()
         return [
             msg.message
             for msg in self._messages[-self._max_size:]
-            if now - msg.ts <= self._expiry_delta
+            if not truncate or now - msg.ts <= self._expiry_delta
         ]
 
     def get_vqd_hash(self):

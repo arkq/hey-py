@@ -30,7 +30,9 @@ examples:
 
     # Configure settings
     hey config
-    # Clear message history cache
+    # View message history
+    hey history
+    # Clear message history
     hey clear
 """)
     parser.add_argument('--agree-tos', action='store_true', help='agree to the DuckDuckGo TOS')
@@ -42,7 +44,7 @@ examples:
                         help='SOCKS proxy URL (e.g., socks5://proxy:1080)')
     parser.add_argument('--save', action='store_true',
                         help='save provided proxy and/or prompt to config')
-    parser.add_argument('args', nargs='*', help='chat query or "config" command')
+    parser.add_argument('args', nargs='*', help='chat query or internal command')
     args = parser.parse_args()
 
     if args.verbose:
@@ -88,9 +90,16 @@ examples:
                 from .cli import run_config
                 run_config(client)
                 return
+            if args.args[0] == "history":
+                for msg in cache.get_messages(truncate=False):
+                    role = config.model.upper() if msg.role == "assistant" else "User"
+                    console.print(f"[bold][blue]{role}")
+                    console.print(Markdown(msg.content))
+                    console.print()
+                return
             if args.args[0] == "clear":
                 cache.clear()
-                console.print("Message history cache cleared.")
+                console.print("Message history has been cleared")
                 return
 
         if args.agree_tos:
@@ -110,7 +119,7 @@ examples:
                 "[bold red]Error:[/] You must agree to DuckDuckGo's Terms of Service to use this tool")
             console.print("Read them here: https://duckduckgo.com/terms")
             console.print("Once you read it, pass --agree-tos parameter to agree.")
-            return 3
+            return 2
 
         if not sys.stdout.isatty():
             logger.error("This program must be run in a terminal")
@@ -118,8 +127,14 @@ examples:
 
         query = ' '.join(args.args)
         if not query:
-            logger.error("No query provided")
-            return 2
+            console.print(f"Selected model: {config.model}")
+            if config.prompt:
+                console.print(f"System prompt: {config.prompt}")
+            if config.proxy:
+                console.print(f"HTTP proxy: {config.proxy}")
+            if config.socks_proxy:
+                console.print(f"SOCKS proxy: {config.socks_proxy}")
+            return
 
         api = DuckAI(client, cache, config)
 
