@@ -7,7 +7,7 @@ from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from rich.console import Console
 
-from .config import Config, load_config
+from .config import Config
 
 console = Console()
 
@@ -177,9 +177,9 @@ def configure_tos(config: Config) -> None:
 
 def run_config(client: httpx.Client) -> None:
     """Run the configuration interface."""
-    config = load_config()
-    if not config:
-        config = Config()
+
+    config = Config()
+    config.load()
 
     # Show current settings
     console.print("[bold blue]Current Settings:[/]")

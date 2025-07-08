@@ -9,7 +9,7 @@ from rich.markdown import Markdown
 
 from .api import DuckAI
 from .cache import Cache
-from .config import Config, load_config
+from .config import Config
 
 
 logger = logging.getLogger("hey")
@@ -52,9 +52,8 @@ examples:
 
     console = Console()
 
-    config = load_config()
-    if not config:
-        config = Config()
+    config = Config()
+    config.load()
 
     if args.proxy:
         if not config.validate_proxy_url(args.proxy):

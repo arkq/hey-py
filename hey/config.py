@@ -10,6 +10,7 @@ import toml
 @dataclass
 class Config:
     """Configuration data."""
+
     tos: bool = False
     model: str = "claude-3-haiku-20240307"
     prompt: Optional[str] = None  # System prompt to apply to all responses
@@ -17,21 +18,31 @@ class Config:
     socks_proxy: Optional[str] = None  # SOCKS proxy URL
 
     @staticmethod
-    def get_path() -> str:
-        """Get the config directory path."""
-        return os.getenv("HEY_CONFIG_PATH", os.path.expanduser("~/.config/hey"))
+    def get_config_dir() -> Path:
+        return Path(os.getenv("HEY_CONFIG_PATH", os.path.expanduser("~/.config/hey")))
 
-    @staticmethod
-    def get_file_name() -> str:
-        """Get the config file name."""
-        return os.getenv("HEY_CONFIG_FILENAME", "conf.toml")
+    @classmethod
+    def get_config_file(cls) -> Path:
+        return cls.get_config_dir() / os.getenv("HEY_CONFIG_FILENAME", "conf.toml")
+
+    def load(self) -> None:
+        """Load configuration from file."""
+        try:
+            data = toml.load(self.get_config_file())
+            self.tos = data.get("tos", self.tos)
+            self.model = data.get("model", self.model)
+            self.prompt = data.get("prompt")  # Will be None if not in file
+            self.proxy = data.get("proxy")  # Will be None if not in file
+            self.socks_proxy = data.get("socks_proxy")  # Will be None if not in file
+        except Exception:
+            # If there's any error loading the config, use defaults
+            pass
 
     def save(self) -> None:
         """Save configuration to file."""
-        config_path = Path(self.get_path())
+        config_path = self.get_config_dir()
         config_path.mkdir(parents=True, exist_ok=True)
 
-        config_file = config_path / self.get_file_name()
         config_data = {
             "tos": self.tos,
             "model": self.model,
@@ -45,8 +56,11 @@ class Config:
         if self.socks_proxy is not None:
             config_data["socks_proxy"] = self.socks_proxy
 
-        with open(config_file, "w") as f:
-            toml.dump(config_data, f)
+        try:
+            with open(self.get_config_file(), 'w') as f:
+                toml.dump(config_data, f)
+        except Exception as e:
+            print(f"Warning: Failed to save configuration: {e}")
 
     def get_proxies(self) -> dict[str, str]:
         """Get proxy configuration as a dictionary for httpx."""
@@ -85,23 +99,3 @@ class Config:
             return parsed.scheme in ("http", "https")
         except Exception:
             return False
-
-
-def load_config() -> Config:
-    """Load configuration from file."""
-    config = Config()
-    config_file = Path(config.get_path()) / config.get_file_name()
-
-    if config_file.exists():
-        try:
-            data = toml.load(config_file)
-            config.tos = data.get("tos", config.tos)
-            config.model = data.get("model", config.model)
-            config.prompt = data.get("prompt")  # Will be None if not in file
-            config.proxy = data.get("proxy")  # Will be None if not in file
-            config.socks_proxy = data.get("socks_proxy")  # Will be None if not in file
-        except Exception:
-            # If there's any error loading the config, use defaults
-            pass
-
-    return config
